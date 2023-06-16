@@ -1,123 +1,105 @@
-var util = require('util');
-
-var bleno = require('./index');
-
-
-var BlenoPrimaryService = bleno.PrimaryService;
-var BlenoCharacteristic = bleno.Characteristic;
-var BlenoDescriptor = bleno.Descriptor;
+const bleno = require('./index');
 
 let handshakeDone = false;
 let C2Callback = null;
 
-console.log('bleno');
+console.log('bleno-matter');
 
-var C3DynamicReadOnlyCharacteristic = function() {
-  C3DynamicReadOnlyCharacteristic.super_.call(this, {
-    uuid: '64630238-8772-45F2-B87D-748A83218F04',
-    properties: ['read']
-  });
-};
-
-util.inherits(C3DynamicReadOnlyCharacteristic, BlenoCharacteristic);
-
-C3DynamicReadOnlyCharacteristic.prototype.onReadRequest = function(offset, callback) {
-  var result = this.RESULT_SUCCESS;
-  var data = Buffer.from('dynamic value');
-
-  console.log('C3DynamicReadOnlyCharacteristic read request: ' + data.toString('hex') + ' ' + offset);
-
-  if (offset > data.length) {
-    result = this.RESULT_INVALID_OFFSET;
-    data = null;
-  } else {
-    data = data.slice(offset);
+class C3DynamicReadOnlyCharacteristic extends bleno.Characteristic {
+  constructor() {
+    super({
+      uuid: '64630238-8772-45F2-B87D-748A83218F04',
+      properties: ['read']
+    });
   }
 
-  callback(result, data);
-};
+  onReadRequest(offset, callback) {
+    let result = this.RESULT_SUCCESS;
+    let data = Buffer.from('dynamic value');
 
-var C1WriteOnlyCharacteristic = function() {
-  C1WriteOnlyCharacteristic.super_.call(this, {
-    uuid: '18EE2EF5-263D-4559-959F-4F9C429F9D11',
-    properties: ['write']
-  });
-};
+    console.log('C3DynamicReadOnlyCharacteristic read request: ' + data.toString('hex') + ' ' + offset);
 
-util.inherits(C1WriteOnlyCharacteristic, BlenoCharacteristic);
+    if (offset > data.length) {
+      result = this.RESULT_INVALID_OFFSET;
+      data = null;
+    } else {
+      data = data.slice(offset);
+    }
 
-C1WriteOnlyCharacteristic.prototype.onWriteRequest = function(data, offset, withoutResponse, callback) {
-  console.log('C1WriteOnlyCharacteristic write request: ' + data.toString('hex') + ' ' + offset + ' ' + withoutResponse);
-
-  if (data[0] === 0x65 && data[1] === 0x6c) {
-    handshakeDone = true;
-    callback();
-    return;
+    callback(result, data);
   }
-
-  callback(this.RESULT_SUCCESS);
-};
-
-var C2IndicateOnlyCharacteristic = function() {
-  C2IndicateOnlyCharacteristic.super_.call(this, {
-    uuid: '18EE2EF5-263D-4559-959F-4F9C429F9D12',
-    properties: ['indicate']
-  });
-};
-
-util.inherits(C2IndicateOnlyCharacteristic, BlenoCharacteristic);
-
-C2IndicateOnlyCharacteristic.prototype.onSubscribe = function(maxValueSize, updateValueCallback) {
-  console.log('C2IndicateOnlyCharacteristic subscribe ' + maxValueSize);
-
-  if (handshakeDone) {
-    C2Callback = updateValueCallback;
-    console.log('C2IndicateOnlyCharacteristic handshake response');
-    updateValueCallback(Buffer.from("656c04000106", "hex"));
-  }
-  /*this.counter = 0;
-  this.changeInterval = setInterval(function() {
-    var data = Buffer.alloc(4);
-    data.writeUInt32LE(this.counter, 0);
-
-    console.log('C2IndicateOnlyCharacteristic update value: ' + this.counter);
-    updateValueCallback(data);
-    this.counter++;
-  }.bind(this), 1000);*/
-};
-
-C2IndicateOnlyCharacteristic.prototype.onUnsubscribe = function() {
-  console.log('C2IndicateOnlyCharacteristic unsubscribe');
-
-  if (this.changeInterval) {
-    clearInterval(this.changeInterval);
-    this.changeInterval = null;
-  }
-};
-
-C2IndicateOnlyCharacteristic.prototype.onIndicate = function() {
-  console.log('C2IndicateOnlyCharacteristic on indicate');
-};
-
-function MatterService() {
-  MatterService.super_.call(this, {
-    uuid: 'fff6', // 0xfff6 ?!
-    characteristics: [
-      new C3DynamicReadOnlyCharacteristic(),
-      new C1WriteOnlyCharacteristic(),
-      new C2IndicateOnlyCharacteristic()
-    ]
-  });
 }
 
-util.inherits(MatterService, BlenoPrimaryService);
+class C1WriteOnlyCharacteristic extends bleno.Characteristic {
+  constructor() {
+    super({
+      uuid: '18EE2EF5-263D-4559-959F-4F9C429F9D11',
+      properties: ['write']
+    });
+  }
+
+  onWriteRequest(data, offset, withoutResponse, callback) {
+    console.log('C1WriteOnlyCharacteristic write request: ' + data.toString('hex') + ' ' + offset + ' ' + withoutResponse);
+
+    if (data[0] === 0x65 && data[1] === 0x6c) {
+      handshakeDone = true;
+      callback();
+      return;
+    }
+
+    callback(this.RESULT_SUCCESS);
+  }
+}
+
+class C2IndicateOnlyCharacteristic extends bleno.Characteristic {
+  constructor() {
+    super({
+      uuid: '18EE2EF5-263D-4559-959F-4F9C429F9D12',
+      properties: ['indicate']
+    });
+  }
+
+  onSubscribe(maxValueSize, updateValueCallback) {
+    console.log('C2IndicateOnlyCharacteristic subscribe ' + maxValueSize);
+
+    if (handshakeDone) {
+      C2Callback = updateValueCallback;
+      console.log('C2IndicateOnlyCharacteristic handshake response');
+      updateValueCallback(Buffer.from("656c04000106", "hex"));
+    }
+  }
+
+  onUnsubscribe() {
+    console.log('C2IndicateOnlyCharacteristic unsubscribe');
+
+    if (this.changeInterval) {
+      clearInterval(this.changeInterval);
+      this.changeInterval = null;
+    }
+  }
+
+  onIndicate() {
+    console.log('C2IndicateOnlyCharacteristic on indicate');
+  }
+}
+
+class MatterService extends bleno.PrimaryService {
+  constructor() {
+    super({
+      uuid: 'fff6', // Matter
+      characteristics: [
+        new C3DynamicReadOnlyCharacteristic(),
+        new C1WriteOnlyCharacteristic(),
+        new C2IndicateOnlyCharacteristic()
+      ]
+    });
+  }
+}
 
 bleno.on('stateChange', function(state) {
   console.log('on -> stateChange: ' + state + ', address = ' + bleno.address);
 
   if (state === 'poweredOn') {
-    //bleno.startAdvertising('test', ['fffffffffffffffffffffffffffffff0']);
-
     // Data as defined 5.4.2.5.6 Matter Spec for a hardcoded product and vendor Id
     // Theoretically use this QR Code https://project-chip.github.io/connectedhomeip/qrcode.html?data=MT:86PS0KQS02-10648G00
 
